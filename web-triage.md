@@ -20,10 +20,10 @@ Triage is sorting and routing, not fixing. Spend 15-30 seconds per issue. You ar
 Use `gh` only to read issue data:
 
 ```bash
-# List untriaged web issues, oldest first
+# List untriaged web issues, oldest first (fetch metadata only, not body)
 gh issue list -R flutter/flutter \
   --search "is:issue is:open label:team-web,fyi-web -label:triaged-web no:assignee -label:\"will need additional triage\" -label:\"waiting for customer response\" sort:updated-asc" \
-  --limit 30 --json number,title,body,labels,createdAt,updatedAt
+  --limit 30 --json number,title,labels,createdAt,updatedAt
 
 # Read a specific issue with comments
 gh issue view <NUMBER> -R flutter/flutter --comments
@@ -62,6 +62,10 @@ If the issue has `fyi-web` but already carries a different `team-*` label from a
 - **P2**: Important, clear, valid issue, but not urgent. This is the default
 - **P3**: Lower importance, unlikely to be worked on soon
 
+**Regressions**: start at P2 minimum. Bump to P1 if the regression is in a widely-used feature or was reported by a customer. A regression in a niche feature with a workaround can stay P2.
+
+**Feature requests/proposals**: P3 unless there's demonstrated demand from multiple users or a top-tier customer. Add `c: new feature` or `c: proposal`.
+
 ### 6. What labels?
 Add all applicable labels from the checklist below.
 
@@ -99,18 +103,26 @@ For each issue, output a recommendation:
 - **Title cleanup**: (suggest improved title, if needed)
 - **Comment**: (suggested comment text, if needed)
 - **Reasoning**: (one sentence explaining why)
-- **Root cause**: (1-2 sentences, only for issues owned by team-web with no linked PR)
+- **Root cause**: (1-2 sentences, only when no linked PR exists)
+- **PR review**: (brief summary, only when a linked PR exists)
 ```
 
 Add the **Root cause** field when ALL of the following are true:
 
-- No linked PR exists yet
+- No linked PR exists
 - The cause can be reasonably inferred from the issue
 - At least one of:
   - The issue is owned by `team-web`, OR
   - The issue is confirmed web-only (only reproduces on web), even if routed to another team like `team-framework`
 
-Skip it when: a PR is already linked, the cause is unknown, or the bug reproduces on all platforms (not web-specific). Keep it to 1-2 sentences: what triggers it and where in the code the fix should go. Do NOT design a full fix.
+Add the **PR review** field when a linked PR exists. Fetch the diff with:
+
+```bash
+gh pr diff <PR_NUMBER> -R flutter/flutter
+gh pr view <PR_NUMBER> -R flutter/flutter --comments
+```
+
+Keep the review to 2-4 sentences covering: does the fix address the root cause, are there obvious edge cases or risks, and is the approach reasonable. This is a quick sanity check, not a full code review.
 
 After all issues, add a summary:
 
@@ -123,10 +135,50 @@ After all issues, add a summary:
 - Remaining untriaged: X issues
 ```
 
+Save triage output to `web-triage/weekly-log/<Month Day, Year>.md`.
+
+## PR Triage
+
+After triaging issues, review untriaged web PRs. For each PR:
+
+1. **Read the PR title and description.** Does it reference an issue? Is the scope clear?
+2. **Check staleness.** Flag PRs with no review activity for 30+ days.
+3. **Label it.** Add `triaged-web` once reviewed. Add other relevant labels like `engine`, `framework`, `a: *` if missing.
+4. **Flag if needed.** If the PR needs a specific reviewer or is blocked, note that in the triage output.
+
+You do not need to code-review PRs during triage. Just confirm they are labeled, not stale, and have a clear owner.
+
 ## Weekly Health Checks
 
-Before triaging new issues, check and report on:
-1. Any unassigned P0/P1 issues
-2. Any P3 issues in the backlog project
-3. Open PR count, flag if 15 or more
-4. Any P0 issues missing a weekly update
+Before triaging new issues, run these checks and report findings.
+
+### Commands
+
+```bash
+# Unassigned P0/P1
+gh issue list -R flutter/flutter \
+  --search "is:open is:issue label:team-web label:P1,P0 no:assignee" \
+  --limit 20 --json number,title,labels
+
+# Untriaged web PRs (flutter/flutter)
+gh pr list -R flutter/flutter \
+  --search "is:open is:pr label:platform-web sort:created-asc draft:false -label:triaged-web" \
+  --limit 50 --json number,title,createdAt
+
+# Untriaged web PRs (flutter/packages)
+gh pr list -R flutter/packages \
+  --search "is:open is:pr label:triage-web sort:updated-asc -is:draft" \
+  --limit 20 --json number,title,createdAt
+
+# Stale "waiting for customer response" (no activity 30+ days)
+gh issue list -R flutter/flutter \
+  --search "is:open is:issue label:team-web label:\"waiting for customer response\" sort:updated-asc" \
+  --limit 20 --json number,title,updatedAt
+```
+
+### Checklist
+
+1. **Unassigned P0/P1 issues.** If an unassigned P0/P1 is already marked `r: duplicate` or `triaged-web` but was never closed, recommend closing it. Do not keep reporting the same zombie issue weekly.
+2. **Open PR count.** Flag if 15 or more untriaged web PRs on flutter/flutter.
+3. **P0 issues missing a weekly update.** Check that any open P0 has had a status comment in the last 7 days.
+4. **Stale "waiting for customer response" issues.** If no activity for 30+ days, recommend closing with a standard "closing due to no response, feel free to reopen with more details" comment.
