@@ -66,7 +66,26 @@ If the issue has `fyi-web` but already carries a different `team-*` label from a
 
 **Feature requests/proposals**: P3 unless there's demonstrated demand from multiple users or a top-tier customer. Add `c: new feature` or `c: proposal`.
 
-### 6. What labels?
+### 6. Suggested assignee?
+
+Use the table below to recommend an assignee based on the issue's area. If an issue spans multiple areas, pick the strongest match. Do not recommend an assignee for issues being re-routed to a different team.
+
+| Area | Assignee | Examples |
+|---|---|---|
+| Accessibility, semantics, screen readers, ARIA | `flutter-zl` | a11y tree, VoiceOver, focus order, `SemanticsAction`, `ensureSemantics` |
+| Scrolling on web, nested scroll, iframe scroll | `flutter-zl` | `f: scrolling`, browser-driven scroll, scroll over platform views |
+| Framework-level web bugs with a11y angle | `flutter-zl` | `MenuAnchor` dismiss with semantics, dialog a11y, `OverlayPortal` click-through |
+| CanvasKit rendering, image decoding, Skwasm | `harryterkelsen` | `e: web_canvaskit`, `e: web_skwasm`, image downscaling, GPU crashes, `CkSurface` |
+| Engine-level rendering, shaders, surfaces | `harryterkelsen` | `c: rendering`, `c: crash` in engine, WebGL context loss, blur, gradients |
+| Wasm runtime, renderer unification | `harryterkelsen` | `e: wasm`, renderer unification, garbage collection |
+| Web packages, web_benchmarks, pointer_interceptor | `mdebbar` | `p: web_benchmarks`, `p: pointer_interceptor`, `p: camera` web |
+| Test infrastructure, flakes, CI | `mdebbar` | `a: tests`, `c: flake`, test harness, Chrome test failures |
+| Platform views, multi-view | `mdebbar` | `a: platform-views`, view factories, multi-view layout |
+| Text input, autofill, keyboard on web | `mdebbar` | `a: text input` non-a11y, autofill, IME, keyboard events |
+
+When no area clearly matches, leave the assignee recommendation blank.
+
+### 7. What labels?
 Add all applicable labels from the checklist below.
 
 ## Label Checklist
@@ -98,6 +117,7 @@ For each issue, output a recommendation:
 ### #NNNNN - <title>
 - **Action**: triage / close / request info / re-route
 - **Priority**: P2
+- **Suggested assignee**: mdebbar / harryterkelsen / flutter-zl / (blank if unclear)
 - **Labels to add**: triaged-web, platform-web, engine
 - **Labels to remove**: (if re-routing)
 - **Title cleanup**: (suggest improved title, if needed)
@@ -109,7 +129,6 @@ For each issue, output a recommendation:
 
 Add the **Root cause** field when ALL of the following are true:
 
-- No linked PR exists
 - The cause can be reasonably inferred from the issue
 - At least one of:
   - The issue is owned by `team-web`, OR
