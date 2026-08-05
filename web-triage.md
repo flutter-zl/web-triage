@@ -88,6 +88,9 @@ When no area clearly matches, leave the assignee recommendation blank.
 ### 7. What labels?
 Add all applicable labels from the checklist below.
 
+### 8. Potential solutions?
+Add possible solutions to fix the issue. No more than 3 solutions.
+
 ## Label Checklist
 
 - **`triaged-web`** to mark as triaged
