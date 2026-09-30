@@ -110,7 +110,7 @@ No screen reader problem is reported, the audit tool isn't named, and the report
 
 ### #193235 - web: `EngineSemanticsOwner.updateSemantics` throws `Null check operator used on a null value` when a sent parent lists a child id with no `SemanticsObject`, and never recovers the tree
 - **Action**: triage (confirm routing only)
-- **Priority**: (leave to team-accessibility; P2 suggested)
+- **Priority**: (leave to team-accessibility; P1 suggested after confirming the repro, see follow-up below)
 - **Suggested assignee**: (blank, owned by team-accessibility; squarely in flutter-zl's area if web picks it up)
 - **Labels to add**: triaged-web
 - **Labels to remove**: none
@@ -118,6 +118,30 @@ No screen reader problem is reported, the audit tool isn't named, and the report
 - **Reasoning**: already on `team-accessibility` + `fyi-web`. There's a minimal repro, production data, and a symbolized stack on 3.47.5. It's related to #175180, whose fix (#177069) is already shipped in the affected builds.
 - **Root cause**: `SemanticsObject.updateChildren`, `recomputeChildrenAdjustment`, and `_visitDepthFirstInTraversalOrder` force-unwrap `owner._semanticsTree[childId]!`. The throw escapes before `_finalizeTree()`, and the framework keeps re-sending the inconsistent parent, so every later frame throws too. `reset()` walks the same stale lists before clearing them.
 - **Potential solutions**: (1) Skip missing child ids with a debug-only `assert` so the producer bug still shows up. (2) Run `_finalizeTree()` in a `finally`. (3) Clear `_semanticsTree`/`_detachments` before finalizing in `reset()`. Separately, find the framework producer that emits a child id it never sent.
+
+#### Follow-up investigation
+
+**Demo**: https://flutter-demo-70-before.web.app. Source: `~/dev/flutter-apps/working on/issue_193235_before`. Test steps: `~/dev/flutter-demo-apps/working on/issues logs/issue_193235/test_instructions.md`. It's the reporter's `dart:ui` repro, which pushes raw `SemanticsUpdateBuilder` updates into `FlutterView.updateSemantics` 2 seconds after startup. Two changes from the reporter's code:
+- The results show on the page inside `ExcludeSemantics`, so the framework tree stays at the root node and doesn't mix with the injected updates.
+- It passes `textDirection: null`, which `updateNode` on master now requires.
+
+**Confirmed on master**, dart2js + CanvasKit release build. Headless Chrome and a manual Chrome run gave the same output, which matches the reporter's 3.47.5 run:
+
+```
+step c,  0 -> [1, 2], node 2 never sent: THROW: Null check operator used on a null value
+step d,  0 -> [1]:                        no throw
+step d2, resend 0 -> [1, 2]:              THROW: Null check operator used on a null value
+step e,  dispose handle and re-ensure:    ok
+step e resend, 0 -> [1]:                  no throw
+```
+
+**Observations:**
+- Every update whose parent names a missing child id throws a raw `TypeError` from the engine. The semantics DOM afterwards is `node-0 > node-1`, with no `node-2`.
+- The owner isn't permanently broken: a corrected child list (step d) goes through. The "never recovers" in production is caused by the sender, because the framework re-sends the bad parent every frame, which is d2 over and over.
+- Step e doesn't really test `reset()`. On web, the engine turns semantics on by itself and the framework holds a handle driven by the platform, so disposing the app's handle never reaches `setSemanticsTreeEnabled(false)`. The reporter corrected this themselves. From reading the source, `reset()` still walks the stale child lists before clearing them, and that part hasn't been reproduced.
+- The engine fix is simple and doesn't depend on the framework bug. The framework code that sends the bad parent is still unknown, and the reporter hasn't narrowed it down to a widget.
+
+**Recommendation**: raise the suggested priority to **P1** for `team-accessibility`. It's a confirmed engine crash with a minimal repro. In the field it silently freezes the accessibility tree for the rest of the page while pixels keep working, so only screen reader users are affected. The reporter's builds already include the #177069 fix. The engine fix is small and in flutter-zl's area, so the web team could offer to take it even though the issue is routed to `team-accessibility`.
 
 ### #193439 - [web] Multi-threaded skwasm hangs or crashes in FreeType: SkMutex is a no-op under -sWASM_WORKERS
 - **Action**: no action (waiting on the reporter)
@@ -247,7 +271,8 @@ Add `triaged-web` to all of these. Suggested extra labels and flags:
 2. **Review #192971 and #193402.** Both are in flutter-zl's area and have no review activity yet.
 3. **Land the approved PRs:** #189835, #192964, #193426, #193510, and packages #12357.
 4. **Re-route #192618** to `team-accessibility` and post the drafted comment. The previous triager meant to re-route it and never changed the labels. Don't add `aria-label` to buttons by default: DOM text is a deliberate JAWS and crawler fix from flutter/engine#50794. Close as WAI unless the reporter names a mainstream audit tool that flags it.
-5. **Assign #193243, #193221, and #193506 to harryterkelsen.**
-6. **Assign #193452 to mdebbar** and add `c: flake`.
-7. **Update `web-triage.md` queries** to use the `waiting for response` label.
-8. **Make a call on #184281 and packages #7950.** Re-flagging them every week isn't getting them resolved.
+5. **Confirm #193235 on the issue and suggest P1.** Reproduced on master with the reporter's repro (demo: https://flutter-demo-70-before.web.app). Offer to take the engine side: skip missing child ids with a debug `assert`, and run `_finalizeTree()` in a `finally`.
+6. **Assign #193243, #193221, and #193506 to harryterkelsen.**
+7. **Assign #193452 to mdebbar** and add `c: flake`.
+8. **Update `web-triage.md` queries** to use the `waiting for response` label.
+9. **Make a call on #184281 and packages #7950.** Re-flagging them every week isn't getting them resolved.
