@@ -33,16 +33,49 @@ Running the check again with `waiting for response` turns up only #193439, which
 There are 11 untriaged issues. Most of them only need a `triaged-web` confirmation because another team already owns them.
 
 ### #192618 - Semantics Accessibility issues with aria-label
-- **Action**: re-route
+- **Action**: re-route + request info (lean toward closing as WAI)
 - **Priority**: P3
 - **Suggested assignee**: (blank, re-routing off team-web)
-- **Labels to add**: triaged-web, team-accessibility, fyi-web, P3, framework, found in release: 3.47
+- **Labels to add**: triaged-web, team-accessibility, fyi-web, P3, framework, found in release: 3.47, waiting for response
 - **Labels to remove**: team-web
 - **Title cleanup**: `[web] Buttons expose accessible name via DOM text instead of aria-label; Semantics wrapper adds an extra node`
-- **Comment**: "Per WAI-ARIA, an accessible name computed from content is valid for `role=button`, and it is what Chrome's accessibility pane shows. Could you share which audit tool or requirement specifically needs `aria-label`? `dropdown_button2` is a third-party package, so we can't change its semantics from here."
-- **Reasoning**: suryaKommana2662 said he was routing this to `team-accessibility` 19 days ago, but the labels were never changed. The ask ("client needs aria-label") is a compliance preference rather than an ARIA violation. The Dropdown2 case is also a third-party package, so this is borderline WAI.
-- **Root cause**: the web engine picks a `LabelRepresentation` per role. Buttons use `domText` (text content) rather than `ariaLabel`, so the name is computed rather than explicit. A `Semantics` wrapper without `container: false` / merge creates its own `SemanticsObject`, which explains the extra child node.
-- **Potential solutions**: (1) Close as WAI with an explanation. (2) Let `Semantics` opt into `aria-label` for buttons.
+- **Comment**: "On web, Flutter gives buttons their accessible name through DOM text, not `aria-label`, on purpose. It works better with crawlers, and JAWS ignores `aria-label` on empty elements (#122607). A name taken from content is valid under ARIA and passes WCAG 4.1.2, which you can confirm in Chrome's Accessibility pane. The extra node in the Cancel example happens because `ElevatedButton` already has button semantics, and the outer `Semantics(button: true, ...)` adds a second button around it. Setting `excludeSemantics: true` on the outer `Semantics`, which is commented out in your sample, removes the duplicate. Could you share which audit tool or rule needs an explicit `aria-label`? That would help us decide whether to add a way to opt into `aria-label` for buttons."
+- **Reasoning**: suryaKommana2662 said he was routing this to `team-accessibility` 19 days ago, but the labels were never changed. The ask ("client needs aria-label") is a compliance preference rather than an ARIA violation. The Dropdown2 case is also a third-party package.
+- **Root cause**: the web engine picks a `LabelRepresentation` per role. Buttons use `domText` on purpose ([tappable.dart:14](https://github.com/flutter/flutter/blob/master/engine/src/flutter/lib/web_ui/lib/src/engine/semantics/tappable.dart#L14)), so the name comes from content and there's no `aria-label`. The extra node comes from app code: `ElevatedButton` already creates its own button semantics node, so wrapping it in `Semantics(container: true, button: true, label:)` nests one button inside another. A node with children switches to `aria-label` ([label_and_value.dart:478](https://github.com/flutter/flutter/blob/master/engine/src/flutter/lib/web_ui/lib/src/engine/semantics/label_and_value.dart#L478)), which is why only the wrapper gets the attribute.
+- **Potential solutions**: (1) Close as WAI with an explanation. (2) A P3 opt-in to force `aria-label` for buttons, only if a mainstream audit tool turns out to flag this.
+
+#### Follow-up investigation
+
+**Demo**: https://flutter-demo-69-before.web.app. Source: `~/dev/flutter-apps/working on/issue_192618_before`. Test steps: `~/dev/flutter-demo-apps/working on/issues logs/issue_192618/test_instructions.md`. It uses the built-in `DropdownButtonFormField` in place of the third-party `dropdown_button2`.
+
+**Verified DOM**, from a headless Chrome dump of the demo. All four claims reproduce:
+
+| Widget | DOM | `aria-label` |
+|---|---|---|
+| TextFormField | `<input aria-label="First name">` | yes, the control case |
+| Plain `ElevatedButton` | `role="button"`, text "Submit All" | no, the name comes from content |
+| `ElevatedButton` in `Semantics(label: 'Cancel', button: true)` | outer `role="button" aria-label="Cancel"` with **no tabindex**, containing inner `role="button" tabindex="0"` with text "Cancel" | outer only. Focus lands on the inner, unlabeled button, and a button inside a button is invalid ARIA |
+| `DropdownButtonFormField` in `Semantics(container: true)` | `role="button" aria-expanded="false"`, text "Department / Select a department sample hint" | no, the name comes from content |
+
+**Design history**: buttons used to render `aria-label`. Yegor moved them to DOM text in flutter/engine#50794 (2024, commit `826074672d7`, fixing #122607) for two reasons:
+- JAWS [ignores `aria-label` on empty elements](https://github.com/FreedomScientific/standards-support/issues/759).
+- Crawlers ignore `aria-label`.
+
+Going back to `aria-label` alone would bring the JAWS bug back. Adding `aria-label` on top of the DOM text avoids that, but it has problems of its own:
+- Google Translate rewrites DOM text but not `aria-label`, so on a translated page the name read aloud would stay untranslated while the visible text changes.
+- It adds nothing for users, since the name is identical.
+- The same argument would then apply to links and headings.
+
+**Reporter's use case**: this is inferred, because the only stated reason is one sentence: "It does have a computed name but to meet accessibility requirements, client needs aria-label." The reporter looks like an agency or contractor with a client accessibility checklist that tests whether the `aria-label` attribute is present, not whether a name exists. The sample reads like an audit test page: one of every control type, a radio group that sets `role`, `label`, `tooltip` and `hint` together, and a commented-out `excludeSemantics: true` workaround. It looks like a bug to them for three reasons:
+- Text fields get `aria-label` and buttons don't, which looks inconsistent.
+- Their check wants the attribute itself, not the computed name.
+- The `Semantics` workaround produced an extra node.
+
+No screen reader problem is reported, the audit tool isn't named, and the reporter hasn't replied since 2026-09-11.
+
+**Decision**: don't add `aria-label` to buttons by default. The deciding question is which tool requires it:
+- axe `button-name`, Lighthouse and WAVE all accept a name taken from content.
+- If the answer is a mainstream checker, look again. If it's a contractual checklist, it's at most a P3 opt-in feature request.
 
 ### #193243 - [web] CanvasKit: intermittent "Null check operator used on a null value" at startup with CPU-only rendering (no WebGL) under CPU contention
 - **Action**: triage
@@ -195,7 +228,7 @@ Add `triaged-web` to all of these. Suggested extra labels and flags:
 
 - Triaged: 11 issues
 - Close: 0 issues
-- Request info: 0 issues (#193439 is already waiting on the reporter)
+- Request info: 1 issue (#192618, asking which audit tool needs `aria-label`; #193439 is already waiting on the reporter)
 - Re-route: 2 issues (#192618 to team-accessibility; #193406 remove team-web, keep team-engine)
 - Confirm-only, routing already set by others: 5 issues (#193287, #193235, #192704, #193488, plus #193406 after cleanup)
 - Keep on team-web: 4 issues (#193243, #193221, #193452, #193506)
@@ -213,7 +246,7 @@ Add `triaged-web` to all of these. Suggested extra labels and flags:
 1. **Land #193407.** It's a one-line fix that removes `IMPELLER_DEBUG` from every wasm release build. It's approved and has a real perf impact. Then drop `team-web` from #193406.
 2. **Review #192971 and #193402.** Both are in flutter-zl's area and have no review activity yet.
 3. **Land the approved PRs:** #189835, #192964, #193426, #193510, and packages #12357.
-4. **Re-route #192618** to `team-accessibility`. The previous triager meant to do it and never changed the labels. Consider closing it as WAI.
+4. **Re-route #192618** to `team-accessibility` and post the drafted comment. The previous triager meant to re-route it and never changed the labels. Don't add `aria-label` to buttons by default: DOM text is a deliberate JAWS and crawler fix from flutter/engine#50794. Close as WAI unless the reporter names a mainstream audit tool that flags it.
 5. **Assign #193243, #193221, and #193506 to harryterkelsen.**
 6. **Assign #193452 to mdebbar** and add `c: flake`.
 7. **Update `web-triage.md` queries** to use the `waiting for response` label.
