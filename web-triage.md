@@ -157,7 +157,9 @@ After all issues, add a summary:
 - Remaining untriaged: X issues
 ```
 
-Save triage output to `web-triage/weekly-log/<Month Day, Year>.md`.
+Save triage output to `web-triage/weekly-log/<YYYY-MM-DD>.md`, for example `weekly-log/2026-10-14.md`.
+
+Then add a link to the new log at the top of the "Weekly Logs" list in `web-triage/README.md`, so the list stays in reverse chronological order: `- [YYYY-MM-DD](weekly-log/YYYY-MM-DD.md)`.
 
 ## PR Triage
 
