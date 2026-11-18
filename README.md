@@ -8,6 +8,7 @@ Weekly triage logs for Flutter Web issues and PRs. The workflow is described in
 Newest first. Each file is named `YYYY-MM-DD.md` after the date of the triage
 session.
 
+- [2026-11-18](weekly-log/2026-11-18.md)
 - [2026-11-04](weekly-log/2026-11-04.md)
 - [2026-10-28](weekly-log/2026-10-28.md)
 - [2026-10-21](weekly-log/2026-10-21.md)
